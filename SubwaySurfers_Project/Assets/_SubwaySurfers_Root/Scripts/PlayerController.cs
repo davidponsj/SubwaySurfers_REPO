@@ -8,13 +8,14 @@ public class PlayerController : MonoBehaviour
     public float jumpForce = 7f;
     private bool isGrounded = true;
     private bool isDead = false;
-    private bool isSliding = false;
 
     void Start()
     {
         animator = GetComponent<Animator>();
         rb = GetComponent<Rigidbody>();
     }
+
+    // --- LLAMADOS DESDE UNITY EVENTS ---
 
     public void Jump()
     {
@@ -27,18 +28,9 @@ public class PlayerController : MonoBehaviour
 
     public void Slide()
     {
-        if (isDead || isSliding) return;
-
-        isSliding = true;
+        if (isDead) return;
         animator.SetTrigger("Slide");
-        Invoke(nameof(EndSlide), 0.8f);
     }
-
-    void EndSlide()
-    {
-        isSliding = false;
-    }
-
 
     public void Die()
     {
