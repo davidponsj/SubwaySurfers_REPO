@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
@@ -9,6 +10,7 @@ public class PlayerController : MonoBehaviour
 
     [Header("Movimiento")]
     [SerializeField] private float jumpForce = 7f;
+    [SerializeField] private float forwardSpeed = 5f;
 
     [Header("Slide Collider")]
     [SerializeField] private float slideHeight = 1f;
@@ -27,36 +29,34 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         capsule = GetComponent<CapsuleCollider>();
 
-        // Guardamos el tamaño original del collider
         originalHeight = capsule.height;
         originalCenter = capsule.center;
 
-        // Evita que la animación mueva al personaje verticalmente
         animator.applyRootMotion = false;
     }
 
-    // -----------------------------
-    //      ACCIONES DEL PLAYER
-    // -----------------------------
-
-    public void Jump()
+    private void Update()
     {
+        if (isDead) return;
+
+        // Movimiento hacia adelante
+        transform.Translate(Vector3.forward * forwardSpeed * Time.deltaTime);
+    }
+
+    public void Jump(InputAction.CallbackContext ctx)
+    {
+        if (!ctx.performed) return;
         if (!isGrounded || isDead) return;
 
         isGrounded = false;
         animator.SetTrigger("Jump");
 
-        rb.linearVelocity = new Vector3(
-            rb.linearVelocity.x,
-            jumpForce,
-            rb.linearVelocity.z
-        );
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, jumpForce, rb.linearVelocity.z);
     }
 
-    public void Slide(UnityEngine.InputSystem.InputAction.CallbackContext ctx)
+    public void Slide(InputAction.CallbackContext ctx)
     {
         if (!ctx.performed) return;
-
         if (isDead) return;
 
         animator.SetTrigger("Slide");
@@ -68,30 +68,21 @@ public class PlayerController : MonoBehaviour
         Invoke(nameof(ResetCollider), slideDuration);
     }
 
-
     public void Die()
     {
         isDead = true;
         animator.SetBool("Dead", true);
     }
 
-    // -----------------------------
-    //      COLISIONES
-    // -----------------------------
+    private void ResetCollider()
+    {
+        capsule.height = originalHeight;
+        capsule.center = originalCenter;
+    }
 
     private void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Ground"))
             isGrounded = true;
-    }
-
-    // -----------------------------
-    //      FUNCIONES INTERNAS
-    // -----------------------------
-
-    private void ResetCollider()
-    {
-        capsule.height = originalHeight;
-        capsule.center = originalCenter;
     }
 }
