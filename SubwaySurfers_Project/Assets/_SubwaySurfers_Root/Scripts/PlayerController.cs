@@ -28,9 +28,9 @@ public class PlayerController : MonoBehaviour
     private Vector3 originalCenter;
 
     [Header("Muerte - Solo Visual")]
-    [SerializeField] private float deathMoveBackDistance = 2f;  // Cuánto se mueve hacia atrás
-    [SerializeField] private float deathFallDistance = 3f;      // Cuánto baja
-    [SerializeField] private float deathAnimationSpeed = 2f;    // Velocidad de la animación
+    [SerializeField] private float deathMoveBackDistance = 2f;
+    [SerializeField] private float deathFallDistance = 3f;
+    [SerializeField] private float deathAnimationSpeed = 2f;
 
     private bool isGrounded = true;
     private bool isDead = false;
@@ -39,11 +39,16 @@ public class PlayerController : MonoBehaviour
     private Vector3 visualTargetPosition;
     private float deathAnimationProgress = 0f;
 
-    // Transform que contiene todos los meshes visuales
     private Transform visualContainer;
 
     private bool isJumping = false;
     private bool isSliding = false;
+
+    [Header("Super Jump Boost")]
+    private bool hasSuperJump = false;
+    private float superJumpMultiplier = 1f;
+    private float superJumpTimeRemaining = 0f;
+    [SerializeField] private GameObject superJumpEffect;  // Efecto visual opcional
 
     private void Start()
     {
@@ -58,21 +63,17 @@ public class PlayerController : MonoBehaviour
 
         targetPosition = transform.position;
 
-        // Crear un contenedor para los meshes visuales
         CreateVisualContainer();
     }
 
     private void CreateVisualContainer()
     {
-        // Crear un GameObject vacío que será el padre de todos los meshes
         GameObject container = new GameObject("VisualContainer");
         container.transform.SetParent(transform);
         container.transform.localPosition = Vector3.zero;
         container.transform.localRotation = Quaternion.identity;
         visualContainer = container.transform;
 
-        // Mover todos los meshes hijos al contenedor (excepto el Animator si está en un hijo)
-        // Hacemos una copia de la lista porque la vamos a modificar
         Transform[] children = new Transform[transform.childCount];
         for (int i = 0; i < transform.childCount; i++)
         {
@@ -81,10 +82,7 @@ public class PlayerController : MonoBehaviour
 
         foreach (Transform child in children)
         {
-            // No mover el contenedor a sí mismo
             if (child == visualContainer) continue;
-
-            // Mover este hijo al contenedor visual
             child.SetParent(visualContainer);
         }
     }
@@ -93,7 +91,6 @@ public class PlayerController : MonoBehaviour
     {
         if (isDead)
         {
-            // Animar solo el contenedor visual
             if (isPlayingDeathAnimation)
             {
                 deathAnimationProgress += Time.deltaTime * deathAnimationSpeed;
@@ -107,6 +104,16 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
+        // Actualizar timer del super jump
+        if (hasSuperJump)
+        {
+            superJumpTimeRemaining -= Time.deltaTime;
+            if (superJumpTimeRemaining <= 0f)
+            {
+                DeactivateSuperJump();
+            }
+        }
+
         transform.Translate(Vector3.forward * forwardSpeed * Time.deltaTime);
 
         Vector3 newPos = new Vector3(targetPosition.x, transform.position.y, transform.position.z);
@@ -114,7 +121,7 @@ public class PlayerController : MonoBehaviour
     }
 
     // ---------------------------------------------------------
-    //   BLOQUEO DE CARRIL POR TREN (LÓGICA CORREGIDA)
+    //   BLOQUEO DE CARRIL POR TREN
     // ---------------------------------------------------------
 
     private bool IsLaneBlockedByTrain(int targetLane)
@@ -126,7 +133,6 @@ public class PlayerController : MonoBehaviour
 
             float playerZ = transform.position.z;
 
-            // Bloqueado si el jugador está entre la parte trasera y delantera del tren
             if (playerZ >= train.BackZ && playerZ <= train.FrontZ)
                 return true;
         }
@@ -185,7 +191,9 @@ public class PlayerController : MonoBehaviour
 
         animator.SetTrigger("Jump");
 
-        rb.linearVelocity = new Vector3(rb.linearVelocity.x, jumpForce, rb.linearVelocity.z);
+        // Aplicar multiplicador de super jump si está activo
+        float currentJumpForce = jumpForce * (hasSuperJump ? superJumpMultiplier : 1f);
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, currentJumpForce, rb.linearVelocity.z);
 
         Invoke(nameof(ResetJump), 0.6f);
     }
@@ -220,7 +228,7 @@ public class PlayerController : MonoBehaviour
     }
 
     // ---------------------------------------------------------
-    //   DETECCIÓN DE MUERTE POR OBSTÁCULOS (CORREGIDA)
+    //   DETECCIÓN DE MUERTE POR OBSTÁCULOS
     // ---------------------------------------------------------
 
     private void OnTriggerEnter(Collider other)
@@ -232,7 +240,6 @@ public class PlayerController : MonoBehaviour
         {
             case Obstacle.Type.Train:
                 if (obs.lane != currentLane) return;
-                // Si estás saltando sobre el tren, no mueres
                 if (isJumping) return;
                 Die();
                 break;
@@ -257,16 +264,56 @@ public class PlayerController : MonoBehaviour
         animator.SetBool("Dead", true);
         forwardSpeed = 0;
 
-        // Configurar animación de muerte SOLO DEL CONTENEDOR VISUAL
         isPlayingDeathAnimation = true;
         deathAnimationProgress = 0f;
         visualStartPosition = visualContainer.localPosition;
 
-        // Posición final RELATIVA: hacia atrás y abajo
         visualTargetPosition = visualStartPosition + new Vector3(
-            0,                          // Sin movimiento lateral
-            -deathFallDistance,         // Bajar
-            -deathMoveBackDistance      // Hacia atrás
+            0,
+            -deathFallDistance,
+            -deathMoveBackDistance
         );
+
+        // Notificar al Game Manager
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.GameOver();
+        }
     }
+
+    // ---------------------------------------------------------
+    //   SUPER JUMP BOOST
+    // ---------------------------------------------------------
+
+    public void ActivateSuperJump(float multiplier, float duration)
+    {
+        hasSuperJump = true;
+        superJumpMultiplier = multiplier;
+        superJumpTimeRemaining = duration;
+
+        // Activar efecto visual si existe
+        if (superJumpEffect != null)
+        {
+            superJumpEffect.SetActive(true);
+        }
+
+        Debug.Log($"¡Super Jump activado! x{multiplier} durante {duration}s");
+    }
+
+    private void DeactivateSuperJump()
+    {
+        hasSuperJump = false;
+        superJumpMultiplier = 1f;
+
+        // Desactivar efecto visual
+        if (superJumpEffect != null)
+        {
+            superJumpEffect.SetActive(false);
+        }
+
+        Debug.Log("Super Jump desactivado");
+    }
+
+    public bool HasSuperJump() => hasSuperJump;
+    public float GetSuperJumpTimeRemaining() => superJumpTimeRemaining;
 }
