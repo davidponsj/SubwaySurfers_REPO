@@ -12,6 +12,13 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float jumpForce = 7f;
     [SerializeField] private float forwardSpeed = 5f;
 
+    [Header("Carriles")]
+    [SerializeField] private float laneDistance = 2.5f; // Distancia entre carriles
+    [SerializeField] private float laneChangeSpeed = 10f;
+
+    private int currentLane = 0; // -1 = izquierda, 0 = centro, 1 = derecha
+    private Vector3 targetPosition;
+
     [Header("Slide Collider")]
     [SerializeField] private float slideHeight = 1f;
     [SerializeField] private Vector3 slideCenter = new Vector3(0, 0.5f, 0);
@@ -33,6 +40,8 @@ public class PlayerController : MonoBehaviour
         originalCenter = capsule.center;
 
         animator.applyRootMotion = false;
+
+        targetPosition = transform.position;
     }
 
     private void Update()
@@ -41,6 +50,41 @@ public class PlayerController : MonoBehaviour
 
         // Movimiento hacia adelante
         transform.Translate(Vector3.forward * forwardSpeed * Time.deltaTime);
+
+        // Movimiento suave hacia el carril objetivo
+        Vector3 newPos = new Vector3(targetPosition.x, transform.position.y, transform.position.z);
+        transform.position = Vector3.Lerp(transform.position, newPos, laneChangeSpeed * Time.deltaTime);
+    }
+
+    // -----------------------------
+    //      INPUTS
+    // -----------------------------
+
+    public void MoveLeft(InputAction.CallbackContext ctx)
+    {
+        if (!ctx.performed) return;
+
+        if (currentLane > -1)
+        {
+            currentLane--;
+            UpdateLanePosition();
+        }
+    }
+
+    public void MoveRight(InputAction.CallbackContext ctx)
+    {
+        if (!ctx.performed) return;
+
+        if (currentLane < 1)
+        {
+            currentLane++;
+            UpdateLanePosition();
+        }
+    }
+
+    private void UpdateLanePosition()
+    {
+        targetPosition = new Vector3(currentLane * laneDistance, transform.position.y, transform.position.z);
     }
 
     public void Jump(InputAction.CallbackContext ctx)
@@ -66,12 +110,6 @@ public class PlayerController : MonoBehaviour
 
         CancelInvoke(nameof(ResetCollider));
         Invoke(nameof(ResetCollider), slideDuration);
-    }
-
-    public void Die()
-    {
-        isDead = true;
-        animator.SetBool("Dead", true);
     }
 
     private void ResetCollider()
